@@ -10,6 +10,12 @@ document management and a grounded question interface.
 > real-model deployment has not been validated in this environment. See
 > [Current limits](#current-limits) before treating this as a production system.
 
+## Development transparency
+
+Development used AI coding assistants, including Claude Code and Cursor. This
+repository contains reviewed project files in an independent Git history and
+does not import the original development commits.
+
 ## What it does
 
 - Parses text-based PDFs and keeps page, heading, and source metadata.
