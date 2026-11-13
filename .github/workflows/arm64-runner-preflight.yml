@@ -1,0 +1,76 @@
+name: ARM64 runner preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runner-preflight:
+    name: Verify native ARM64 and Docker resources
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    steps:
+      - name: Inspect runner architecture and resources
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          host_arch="$(uname -m)"
+          os_arch="$(dpkg --print-architecture)"
+          printf 'uname architecture: %s\n' "$host_arch"
+          printf 'OS package architecture: %s\n' "$os_arch"
+          case "$host_arch" in
+            aarch64|arm64) ;;
+            *) echo '::error::Runner host is not ARM64/aarch64'; exit 1 ;;
+          esac
+          case "$os_arch" in
+            arm64) ;;
+            *) echo '::error::Operating system is not ARM64'; exit 1 ;;
+          esac
+
+          printf 'Online CPU count: %s\n' "$(getconf _NPROCESSORS_ONLN)"
+          cpu_description="$(awk -F: '/^(model name|Hardware|Processor|CPU part)[[:space:]]*:/ {gsub(/^[[:space:]]+/, "", $2); print $2; exit}' /proc/cpuinfo)"
+          printf 'CPU description: %s\n' "${cpu_description:-unavailable}"
+
+          read -r total_mib available_mib < <(awk '/MemTotal:/ {t=$2} /MemAvailable:/ {a=$2} END {printf "%d %d\n", t/1024, a/1024}' /proc/meminfo)
+          printf 'Memory total: %s MiB\n' "$total_mib"
+          printf 'Memory available: %s MiB\n' "$available_mib"
+          if (( total_mib < 8192 || available_mib < 4096 )); then
+            echo '::warning::Memory is below the rough 8 GiB total / 4 GiB available planning target for sequential image builds and runtime checks.'
+          else
+            echo 'Memory meets the rough sequential-validation planning target; this is not a capacity guarantee.'
+          fi
+
+          disk_available_mib="$(df -Pk / | awk 'NR==2 {printf "%d", $4/1024}')"
+          printf 'Root filesystem available: %s MiB\n' "$disk_available_mib"
+          if (( disk_available_mib < 20480 )); then
+            echo '::warning::Free disk is below the rough 20 GiB planning estimate for image layers, model cache, and disposable runtime data.'
+          else
+            echo 'Free disk meets the rough 20 GiB sequential-validation planning estimate.'
+          fi
+
+          echo 'Docker client/server versions:'
+          docker version
+          docker_info="$(docker info --format '{{.Architecture}}|{{.OSType}}|{{.NCPU}}|{{.MemTotal}}')"
+          IFS='|' read -r docker_arch docker_os docker_cpus docker_memory <<< "$docker_info"
+          printf 'Docker server architecture: %s\n' "$docker_arch"
+          printf 'Docker server OS: %s\n' "$docker_os"
+          printf 'Docker server CPUs: %s\n' "$docker_cpus"
+          printf 'Docker server memory: %s bytes\n' "$docker_memory"
+          case "$docker_arch" in
+            aarch64|arm64) ;;
+            *) echo '::error::Docker daemon does not report ARM64/aarch64 architecture'; exit 1 ;;
+          esac
+          if [[ "$docker_os" != linux ]]; then
+            echo '::error::Docker daemon is not using Linux containers'
+            exit 1
+          fi
+          if [[ "$docker_arch" != "$os_arch" && ! ( "$docker_arch" == aarch64 && "$os_arch" == arm64 ) ]]; then
+            echo '::error::Runner and Docker daemon architectures differ; native ARM64 is not confirmed'
+            exit 1
+          fi
+          echo 'Native ARM64 status: confirmed by ARM64 host, OS, and Docker daemon architecture; no emulation or image build was used.'
+
+          docker compose version

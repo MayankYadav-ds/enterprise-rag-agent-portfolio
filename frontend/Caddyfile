@@ -1,0 +1,9 @@
+{$RAG_PUBLIC_DOMAIN} {
+	encode zstd gzip
+
+ @api path /health /ready /ready/generation /auth /auth/* /api/v1 /api/v1/*
+	reverse_proxy @api api:8000
+
+	try_files {path} /index.html
+	file_server
+}

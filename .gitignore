@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Data and local services
+data/raw/
+data/processed/
+data/managed_documents/
+qdrant_storage/
+
+# Notebooks and editors
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agent handoff files
+.agent/
+
+# Local runtime data and logs
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+*.session
+*.session-*
+*.log
+logs/
+.cache/
+
+# Credentials and certificate material
+secrets/
+certs/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Temporary test output
+*.tmp
+*.temp
+test-results/
+playwright-report/
