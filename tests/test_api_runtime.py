@@ -30,12 +30,12 @@ def test_read_only_missing_collection_and_recreate_do_not_write():
 
 def test_bm25_runtime_uses_payloads_without_loading_models(monkeypatch):
     client = Mock()
-    monkeypatch.setattr("rag_agent.api.runtime.QdrantClient", Mock(return_value=client))
+    monkeypatch.setattr("qdrant_client.QdrantClient", Mock(return_value=client))
     store = Mock()
     store.scroll_payloads.return_value = {}
     store_class = Mock(return_value=store)
     embedder_class = Mock(side_effect=AssertionError("must not load"))
-    monkeypatch.setattr("rag_agent.api.runtime.QdrantStore", store_class)
+    monkeypatch.setattr("rag_agent.embeddings.store.QdrantStore", store_class)
     monkeypatch.setattr("rag_agent.api.runtime.SentenceTransformerEmbedder", embedder_class)
     runtime = Runtime(APISettings())
     assert runtime.retrieve(RetrievalRequest(question="x", strategy="bm25"), tenant_id=TENANT) == []
@@ -59,8 +59,8 @@ def test_runtime_retrieval_requires_a_valid_explicit_tenant():
 def test_unavailable_service_retries_without_loading_dense_model(monkeypatch):
     store = Mock(side_effect=ConnectionError("private host"))
     model = Mock()
-    monkeypatch.setattr("rag_agent.api.runtime.QdrantStore", store)
-    monkeypatch.setattr("rag_agent.api.runtime.QdrantClient", Mock())
+    monkeypatch.setattr("rag_agent.embeddings.store.QdrantStore", store)
+    monkeypatch.setattr("qdrant_client.QdrantClient", Mock())
     monkeypatch.setattr("rag_agent.api.runtime.SentenceTransformerEmbedder", model)
     runtime = Runtime(APISettings())
     for _ in range(2):
@@ -142,7 +142,7 @@ def test_local_qdrant_http_remains_available():
 def test_qdrant_https_preserves_verified_http_client_default(monkeypatch):
     client = Mock()
     constructor = Mock(return_value=client)
-    monkeypatch.setattr("rag_agent.api.runtime.QdrantClient", constructor)
+    monkeypatch.setattr("qdrant_client.QdrantClient", constructor)
     settings = APISettings(
         qdrant_url="https://qdrant.example.com:6333", qdrant_api_key="private-key"
     )
@@ -161,7 +161,7 @@ def test_qdrant_client_receives_ca_context_api_key_and_timeout(monkeypatch):
 
     client = Mock()
     constructor = Mock(return_value=client)
-    monkeypatch.setattr("rag_agent.api.runtime.QdrantClient", constructor)
+    monkeypatch.setattr("qdrant_client.QdrantClient", constructor)
     settings = APISettings(
         qdrant_url="https://qdrant.example.com:6333",
         qdrant_api_key="private-key",
@@ -183,7 +183,7 @@ def test_qdrant_client_receives_ca_context_api_key_and_timeout(monkeypatch):
 def test_loopback_http_does_not_enable_or_downgrade_tls(monkeypatch):
     client = Mock()
     constructor = Mock(return_value=client)
-    monkeypatch.setattr("rag_agent.api.runtime.QdrantClient", constructor)
+    monkeypatch.setattr("qdrant_client.QdrantClient", constructor)
     runtime = Runtime(APISettings(qdrant_url="http://localhost:6333"))
     runtime.qdrant_client()
     options = constructor.call_args.kwargs
@@ -345,7 +345,7 @@ def test_real_retrievers_and_optional_reranker_compose(monkeypatch, strategy, re
             )
         ],
     )
-    monkeypatch.setattr("rag_agent.api.runtime.QdrantClient", Mock(return_value=client))
+    monkeypatch.setattr("qdrant_client.QdrantClient", Mock(return_value=client))
     model = Mock(return_value=embedder)
     monkeypatch.setattr("rag_agent.api.runtime.SentenceTransformerEmbedder", model)
     encoder = Mock(return_value=FakeCrossEncoder())

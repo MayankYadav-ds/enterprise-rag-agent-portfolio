@@ -164,7 +164,7 @@ def test_cross_process_writer_lock_and_crash_recovery_then_retry_and_citations(
         assert contender.exitcode == 0
 
         # The successful registration committed before the child crashed.
-        database = root + "\\inventory.sqlite3"
+        database = Path(root) / "inventory.sqlite3"
         with sqlite3.connect(database) as connection:
             rows = connection.execute("SELECT id, tenant_id, record FROM documents").fetchall()
             integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]

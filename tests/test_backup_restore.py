@@ -788,23 +788,33 @@ else:
         )
         for _ in range(2)
     ]
-    for process in processes:
-        assert process.stdin is not None and process.stdout is not None
-        process.stdin.write(request + "\n")
-        process.stdin.flush()
-    assert [process.stdout.readline().strip() for process in processes] == ["READY", "READY"]
-    for process in processes:
-        assert process.stdin is not None
-        process.stdin.write("go\n")
-        process.stdin.flush()
-        process.stdin.close()
-    results = []
-    for process in processes:
-        stdout, stderr = process.communicate(timeout=30)
-        assert process.returncode == 0, stderr
-        results.append(stdout.strip())
+    try:
+        for process in processes:
+            assert process.stdin is not None and process.stdout is not None
+            process.stdin.write(request + "\n")
+            process.stdin.flush()
+        assert [process.stdout.readline().strip() for process in processes] == ["READY", "READY"]
+        for process in processes:
+            assert process.stdin is not None
+            process.stdin.write("go\n")
+            process.stdin.flush()
+            process.stdin.close()
+            process.stdin = None  # communicate must not flush an already closed pipe.
+        results = []
+        for process in processes:
+            stdout, stderr = process.communicate(timeout=30)
+            assert process.returncode == 0, stderr
+            results.append(stdout.strip())
 
-    assert sorted(results) == ["PUBLISHED", "REJECTED"]
+        assert sorted(results) == ["PUBLISHED", "REJECTED"]
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
+            process.wait(timeout=10)
+            for stream in (process.stdin, process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()
     assert destination.is_dir()
     with sqlite3.connect(destination / "inventory.sqlite3") as db:
         assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"

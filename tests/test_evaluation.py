@@ -26,6 +26,28 @@ from rag_agent.evaluation.runner import (
     run_evaluation,
 )
 
+
+@pytest.fixture
+def fictional_gold_path(tmp_path):
+    """Schema/CLI fixture only; never represents real retrieval quality."""
+    path = tmp_path / "fictional_gold.json"
+    path.write_text(
+        json.dumps(
+            {
+                "queries": [
+                    {
+                        "query": "How many fictional kits were delivered?",
+                        "relevant_chunk_ids": ["fictional-kit-chunk"],
+                        "note": "Deterministic synthetic test annotation",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -108,7 +130,7 @@ def _gold_queries():
     """Return a small hard-coded gold set for testing."""
     return [
         {
-            "query": "What are the main risk factors discussed by N-able?",
+            "query": "How many fictional kits were delivered?",
             "relevant_chunk_ids": ["chunk_risk_1", "chunk_risk_2"],
         },
         {
@@ -200,15 +222,15 @@ class TestMeanReciprocalRank:
 class TestLoadGoldSet:
     """Verify loading gold_set.json and handling missing/malformed data."""
 
-    def test_valid_gold_set_loads(self):
+    def test_valid_gold_set_loads(self, fictional_gold_path):
         """A valid gold_set.json with well-formed queries loads correctly."""
-        gs = load_gold_set()
-        assert isinstance(gs, type(load_gold_set()))
+        gs = load_gold_set(fictional_gold_path)
+        assert isinstance(gs, type(load_gold_set(fictional_gold_path)))
         assert gs.size > 0
 
-    def test_gold_set_version(self):
+    def test_gold_set_version(self, fictional_gold_path):
         """The gold set version should be a non-empty string."""
-        gs = load_gold_set()
+        gs = load_gold_set(fictional_gold_path)
         assert len(gs.version) > 0
 
     def test_custom_gold_files_record_their_own_versions(self, tmp_path):
@@ -233,12 +255,12 @@ class TestLoadGoldSet:
             versions.append(gold.version)
         assert versions[0] != versions[1]
 
-    def test_relevant_ids_for(self):
+    def test_relevant_ids_for(self, fictional_gold_path):
         """relevant_ids_for returns correct chunk IDs for a known query."""
-        gs = load_gold_set()
-        rid = gs.relevant_ids_for("What are the main risk factors discussed by N-able?")
+        gs = load_gold_set(fictional_gold_path)
+        rid = gs.relevant_ids_for("How many fictional kits were delivered?")
         assert isinstance(rid, frozenset)
-        assert len(rid) > 0
+        assert rid == frozenset({"fictional-kit-chunk"})
 
 
 class TestInvalidGoldSet:
@@ -683,7 +705,9 @@ class TestEvaluationMetadata:
         return {"dense": dense, "bm25": bm25, "hybrid": HybridRetriever(dense, bm25)}[strategy]
 
     @pytest.mark.parametrize("strategy", ["dense", "bm25", "hybrid"])
-    def test_disabled_metadata_serializes_actual_strategy(self, strategy, monkeypatch):
+    def test_disabled_metadata_serializes_actual_strategy(
+        self, strategy, monkeypatch, fictional_gold_path
+    ):
         from rag_agent.evaluation.runner import result_to_dict
         from rag_agent.retrieval.reranker import CrossEncoderReranker
 
@@ -692,7 +716,7 @@ class TestEvaluationMetadata:
 
         monkeypatch.setattr(CrossEncoderReranker, "_load_model", fail_loading)
         monkeypatch.setenv("RERANKER_MODEL", "unused/environment-model")
-        gold = load_gold_set()
+        gold = load_gold_set(fictional_gold_path)
         result = run_evaluation(self._retriever(strategy), gold, top_k=10)
         serialized = json.loads(json.dumps(result_to_dict(result)))
         assert serialized["dataset_version"] == gold.version
@@ -839,7 +863,7 @@ class TestEvaluationMetadata:
         ],
     )
     def test_cli_passes_strategy_and_model_precedence(
-        self, monkeypatch, environment, explicit, expected
+        self, monkeypatch, environment, explicit, expected, fictional_gold_path
     ):
         from rag_agent.evaluation import runner
 
@@ -847,7 +871,16 @@ class TestEvaluationMetadata:
             monkeypatch.delenv("RERANKER_MODEL", raising=False)
         else:
             monkeypatch.setenv("RERANKER_MODEL", environment)
-        argv = ["evaluate", "--strategy", "hybrid", "--rerank", "--rerank-candidates", "24"]
+        argv = [
+            "evaluate",
+            "--gold-set",
+            str(fictional_gold_path),
+            "--strategy",
+            "hybrid",
+            "--rerank",
+            "--rerank-candidates",
+            "24",
+        ]
         if explicit is not None:
             argv.extend(["--rerank-model", explicit])
         monkeypatch.setattr(sys, "argv", argv)
